@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GuitarScale Studio - Visualizador de Escalas en Guitarra Acústica</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        studio: {
+                            950: '#09090b',
+                            900: '#121215',
+                            800: '#1c1c21',
+                            700: '#27272e',
+                            accent: '#f59e0b', // Amber/Warm Acoustic
+                            root: '#f43f5e',   // Rose para la Tónica
+                            scale: '#0ea5e9',  // Sky/Cyan para notas de la escala
+                            active: '#10b981'  // Emerald cuando suena
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #09090b;
+            color: #f4f4f5;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Scroll horizontal suave para el diapasón en pantallas móviles */
+        .fretboard-wrapper {
+            overflow-x: auto;
+            padding-bottom: 12px;
+        }
+        
+        .fretboard-wrapper::-webkit-scrollbar {
+            height: 8px;
+        }
+        .fretboard-wrapper::-webkit-scrollbar-track {
+            background: #121215;
+            border-radius: 4px;
+        }
+        .fretboard-wrapper::-webkit-scrollbar-thumb {
+            background: #27272e;
+            border-radius: 4px;
+        }
+        .fretboard-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #3f3f46;
+        }
+
+        /* Madera de palisandro (Rosewood) realista para el diapasón */
+        .fretboard-wood {
+            background: linear-gradient(180deg, #2b1a12 0%, #3d251a 50%, #24150e 100%);
+            box-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.85), inset 0 2px 6px rgba(255, 255, 255, 0.06);
+            border: 1px solid #4a2e20;
+            position: relative;
+        }
+
+        /* Cejuela (Nut) de hueso */
+        .guitar-nut {
+            background: linear-gradient(90deg, #e7e5e4 0%, #fafaf9 50%, #d6d3d1 100%);
+            box-shadow: 3px 0 8px rgba(0, 0, 0, 0.65);
+        }
+
+        /* Trastes metálicos (Nickel-Silver) */
+        .fret-wire {
+            background: linear-gradient(90deg, #71717a 0%, #e4e4e7 45%, #52525b 100%);
+            box-shadow: 1px 0 3px rgba(0, 0, 0, 0.7);
+        }
+
+        /* Cuerdas entorchadas y lisas de guitarra acústica */
+        .guitar-string {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            transition: transform 0.05s ease;
+        }
+
+        .string-wound {
+            background: repeating-linear-gradient(
+                90deg,
+                #d97706 0px,
+                #fbbf24 2px,
+                #92400e 4px
+            );
+            box-shadow: 0 2px 3px rgba(0, 0, 0, 0.75);
+        }
+
+        .string-plain {
+            background: linear-gradient(180deg, #f4f4f5 0%, #a1a1aa 100%);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+        }
+
+        /* Animación de vibración de cuerda al tocar */
+        @keyframes stringVibrate {
+            0% { transform: translateY(-50%) scaleY(1); }
+            25% { transform: translateY(calc(-50% - 2px)) scaleY(1.3); }
+            50% { transform: translateY(calc(-50% + 2px)) scaleY(1.3); }
+            75% { transform: translateY(calc(-50% - 1px)) scaleY(1.15); }
+            100% { transform: translateY(-50%) scaleY(1); }
+        }
+
+        .string-vibrating {
+            animation: stringVibrate 0.25s ease-out;
+        }
+
+        /* Marcadores de posición (Inlays de nácar) */
+        .fret-inlay {
+            width: 14px;
+            height: 14px;
+            border-radius: 9999px;
+            background: radial-gradient(circle at 35% 35%, #ffffff 0%, #d4d4d8 60%, #a1a1aa 100%);
+            box-shadow: inset 0 1px 2px rgba(255,255,255,0.8), 0 1px 3px rgba(0,0,0,0.6);
+            opacity: 0.75;
+            pointer-events: none;
+        }
+
+        /* Puntos de pisada (Fret Markers / Dedos) */
+        .note-dot {
+            transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease, background-color 0.15s ease;
+        }
+        .fret-cell:hover .note-dot {
+            transform: scale(1.15);
+        }
+        .note-dot.is-playing {
+            background: #10b981 !important;
+            border-color: #a7f3d0 !important;
+            color: #022c22 !important;
+            transform: scale(1.28) !important;
+            box-shadow: 0 0 22px rgba(16, 185, 129, 0.95) !important;
+            z-index: 30;
+        }
+
+        /* Zona resaltada de la caja/posición activa */
+        .in-box-highlight {
+            background-color: rgba(245, 158, 11, 0.08);
+        }
+
+        /* Range slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #f59e0b;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #27272e;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between antialiased selection:bg-amber-500 selection:text-zinc-950">
+
+    <!-- Barra Superior / Header -->
+    <header class="border-b border-zinc-800/80 bg-studio-900/85 backdrop-blur-md sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                    <i data-lucide="guitar" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                        GuitarScale <span class="text-xs font-mono uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">Acoustic</span>
+                    </h1>
+                    <p class="text-xs text-zinc-400 hidden sm:block">Visualizador de Diapasón, Digitación y Escalas Acústicas</p>
+                </div>
+            </div>
+
+            <!-- Controles de Visualización y Sonido -->
+            <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <!-- Modo de visualización en los círculos (Dedos 1-4 vs Orden vs Notas vs Grados) -->
+                <div class="flex items-center bg-studio-800 p-1 rounded-lg border border-zinc-700/60" title="Qué mostrar dentro de cada punto del diapasón">
+                    <button id="btn-badge-fingering" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-500 text-zinc-950 transition-all cursor-pointer">Dedos 1-4</button>
+                    <button id="btn-badge-order" class="px-2.5 py-1 text-xs font-medium rounded-md text-zinc-400 hover:text-white transition-all cursor-pointer">Orden 1,2..</button>
+                    <button id="btn-badge-notes" class="px-2.5 py-1 text-xs font-medium rounded-md text-zinc-400 hover:text-white transition-all cursor-pointer">Notas</button>
+                    <button id="btn-badge-degrees" class="px-2.5 py-1 text-xs font-medium rounded-md text-zinc-400 hover:text-white transition-all cursor-pointer">Grados</button>
+                </div>
+
+                <!-- Selector de Notación (Inglesa vs Latina) -->
+                <div class="flex items-center bg-studio-800 p-1 rounded-lg border border-zinc-700/60" title="Cambiar sistema de notación">
+                    <button id="btn-notation-en" class="px-2.5 py-1 text-xs font-medium rounded-md bg-indigo-600 text-white transition-all">E A D G B E</button>
+                    <button id="btn-notation-es" class="px-2.5 py-1 text-xs font-medium rounded-md text-zinc-400 hover:text-white transition-all">Mi La Re</button>
+                </div>
+
+                <!-- Selector de Orientación (Diestro / Zurdo) -->
+                <button id="btn-toggle-handedness" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 border border-zinc-700/60 text-xs font-medium text-zinc-200 transition-all" title="Invertir diapasón para guitarristas zurdos">
+                    <i data-lucide="flip-horizontal" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span id="handedness-label">Diestro</span>
+                </button>
+
+                <!-- Selector de Timbre Acústico -->
+                <div class="relative">
+                    <select id="guitar-tone" class="appearance-none bg-studio-800 hover:bg-studio-700 border border-zinc-700/60 text-xs font-medium text-zinc-200 rounded-lg pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer">
+                        <option value="steel">🎸 Acústica Acero (Folk)</option>
+                        <option value="nylon">🎶 Clásica Nylon (Española)</option>
+                        <option value="warm-jazz">🎵 Electroacústica Cálida</option>
+                    </select>
+                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-zinc-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Panel de Control Principal: Tónica, Escala, Posición del Mástil y Reproducción -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-4 bg-studio-900 border border-zinc-800/90 rounded-2xl p-4 sm:p-5 shadow-xl">
+            
+            <!-- 1. Nota Raíz (Tónica) -->
+            <div class="lg:col-span-4 space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-studio-root"></span>
+                        1. Nota Raíz (Tónica)
+                    </label>
+                    <span id="selected-root-display" class="text-xs font-mono text-rose-400 font-semibold">C (Do)</span>
+                </div>
+                <div id="root-selector-grid" class="grid grid-cols-6 gap-1.5">
+                    <!-- Botones generados dinámicamente -->
+                </div>
+            </div>
+
+            <!-- 2. Tipo de Escala y Posición en el Mástil -->
+            <div class="lg:col-span-5 space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <!-- Tipo de Escala -->
+                    <div class="space-y-1.5">
+                        <label for="scale-select" class="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-studio-scale"></span>
+                            2. Escala / Modo
+                        </label>
+                        <div class="relative">
+                            <select id="scale-select" class="w-full appearance-none bg-studio-800 hover:bg-studio-700/80 border border-zinc-700 text-white text-xs sm:text-sm font-medium rounded-xl px-3 py-2.5 pr-8 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all cursor-pointer">
+                                <!-- Opciones dinámicas -->
+                            </select>
+                            <i data-lucide="chevrons-up-down" class="w-4 h-4 text-zinc-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                        </div>
+                    </div>
+
+                    <!-- Posición / Caja en el Diapasón -->
+                    <div class="space-y-1.5">
+                        <label for="position-select" class="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                            3. Posición / Caja
+                        </label>
+                        <div class="relative">
+                            <select id="position-select" class="w-full appearance-none bg-studio-800 hover:bg-studio-700/80 border border-zinc-700 text-white text-xs sm:text-sm font-medium rounded-xl px-3 py-2.5 pr-8 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all cursor-pointer">
+                                <option value="box1">Posición 1 (Principal)</option>
+                                <option value="box2">Posición 2 (Media)</option>
+                                <option value="box3">Posición 3 (Aguda)</option>
+                                <option value="open">Posición Abierta (Trastes 0-4)</option>
+                                <option value="all">Todo el Diapasón (0-15)</option>
+                            </select>
+                            <i data-lucide="chevrons-up-down" class="w-4 h-4 text-zinc-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                        </div>
+                    </div>
+                </div>
+                <p id="scale-description" class="text-xs text-zinc-400 leading-relaxed line-clamp-2">
+                    La escala más utilizada en la música occidental. Alegre, brillante y resuelta.
+                </p>
+            </div>
+
+            <!-- 3. Controles de Reproducción Automática -->
+            <div class="lg:col-span-3 flex flex-col justify-between bg-studio-800/60 border border-zinc-700/50 rounded-xl p-3.5 space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                        <i data-lucide="volume-2" class="w-3.5 h-3.5 text-emerald-400"></i>
+                        Punteo Guiado
+                    </span>
+                    <span class="text-xs font-mono text-zinc-300 bg-studio-900 px-2 py-0.5 rounded border border-zinc-700">
+                        <span id="bpm-value">110</span> BPM
+                    </span>
+                </div>
+
+                <!-- Slider de Velocidad -->
+                <div class="space-y-1">
+                    <input type="range" id="bpm-slider" min="50" max="220" value="110" class="w-full">
+                    <div class="flex justify-between text-[10px] text-zinc-500 font-mono">
+                        <span>Lento</span>
+                        <span>Medio</span>
+                        <span>Rápido</span>
+                    </div>
+                </div>
+
+                <!-- Botones Tocar / Detener -->
+                <div class="flex items-center gap-2 pt-0.5">
+                    <button id="btn-play-scale" class="flex-1 flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 active:scale-[0.98] text-zinc-950 text-xs sm:text-sm font-bold py-2 px-3 rounded-lg shadow-lg shadow-amber-500/20 transition-all cursor-pointer">
+                        <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+                        <span>Tocar Escala</span>
+                    </button>
+                    <button id="btn-stop-scale" class="hidden flex-1 flex items-center justify-center gap-1.5 bg-rose-600 hover:bg-rose-500 active:scale-[0.98] text-white text-xs sm:text-sm font-semibold py-2 px-3 rounded-lg shadow-lg shadow-rose-600/25 transition-all cursor-pointer">
+                        <i data-lucide="square" class="w-4 h-4 fill-current"></i>
+                        <span>Detener</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sección del Diapasón de Guitarra Acústica (6 Cuerdas x 15 Trastes) -->
+        <section class="space-y-3">
+            <!-- Barra de Leyenda y Monitor de Nota Tocada en Tiempo Real -->
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-studio-900/90 border border-zinc-800 px-3.5 py-2.5 rounded-xl text-xs">
+                <div class="flex flex-wrap items-center gap-3 sm:gap-4">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-studio-root inline-block shadow-sm"></span>
+                        <span class="text-zinc-300 font-medium">Tónica</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-studio-scale inline-block shadow-sm"></span>
+                        <span class="text-zinc-300 font-medium">Escala</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="px-1.5 py-0.5 rounded-full bg-zinc-200 text-zinc-950 font-bold text-[10px] leading-none">0</span>
+                        <span class="text-zinc-300 font-medium">Al aire</span>
+                    </div>
+                    <div class="hidden xl:flex items-center gap-2 text-zinc-400 border-l border-zinc-800 pl-3 font-mono text-[11px]">
+                        <span><strong class="text-amber-400">1</strong>:Índice</span> ·
+                        <span><strong class="text-amber-400">2</strong>:Medio</span> ·
+                        <span><strong class="text-amber-400">3</strong>:Anular</span> ·
+                        <span><strong class="text-amber-400">4</strong>:Meñique</span>
+                    </div>
+                </div>
+
+                <!-- Visor en vivo de la nota pulsada -->
+                <div id="live-fret-indicator" class="flex items-center gap-2.5 bg-studio-950 border border-zinc-700/80 px-3.5 py-1.5 rounded-lg shadow-inner">
+                    <span id="live-note-pill" class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono font-bold text-xs">--</span>
+                    <span id="live-fret-text" class="text-zinc-300 font-medium">
+                        Pulsa cualquier punto del diapasón para ver la nota y su orden
+                    </span>
+                </div>
+            </div>
+
+            <!-- Contenedor del Diapasón -->
+            <div class="fretboard-wrapper">
+                <div id="guitar-fretboard" class="min-w-[960px] rounded-2xl p-3 sm:p-4 bg-studio-900 border border-zinc-800 shadow-2xl">
+                    <!-- Generado dinámicamente por JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Panel Inferior: Teoría, Secuencia de Trastes/Dedos y Acordes Diatónicos -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Columna Izquierda: Desglose de Notas, Trastes y Dedos -->
+            <div class="lg:col-span-5 bg-studio-900 border border-zinc-800/90 rounded-2xl p-5 flex flex-col justify-between space-y-5 shadow-lg">
+                <div>
+                    <div class="flex items-center justify-between border-b border-zinc-800 pb-3 mb-4">
+                        <h2 id="theory-title" class="text-base font-bold text-white flex items-center gap-2">
+                            <i data-lucide="book-open" class="w-4 h-4 text-amber-400"></i>
+                            <span>C Mayor (Jónica)</span>
+                        </h2>
+                        <span id="position-badge" class="text-xs font-mono bg-amber-500/15 text-amber-300 px-2.5 py-1 rounded-full border border-amber-500/30">
+                            Trastes 7–10
+                        </span>
+                    </div>
+
+                    <!-- Notas de la Escala -->
+                    <div class="space-y-2 mb-5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Orden de Pulsación en esta Posición</span>
+                            <span id="note-count-label" class="text-[11px] font-mono text-zinc-400">7 notas</span>
+                        </div>
+                        <div id="scale-notes-cards" class="flex flex-wrap gap-2">
+                            <!-- Tarjetas generadas dinámicamente -->
+                        </div>
+                    </div>
+
+                    <!-- Fórmula de Intervalos -->
+                    <div class="space-y-2">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-zinc-400 block">Estructura de Intervalos (Tonos y Semitonos)</span>
+                        <div id="intervals-formula" class="flex flex-wrap items-center gap-1.5 bg-studio-950/80 p-3 rounded-xl border border-zinc-800/80 font-mono text-xs">
+                            <!-- Fórmula generada dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Consejo práctico de digitación en guitarra -->
+                <div class="bg-amber-950/20 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2.5 text-xs text-amber-200/85">
+                    <i data-lucide="hand" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
+                    <p id="fingering-tip-text">
+                        Regla de un dedo por traste: asigna el <strong>Dedo 1 (Índice)</strong> al traste base de la caja y extiende los dedos <strong>2, 3 y 4</strong> consecutivamente.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Columna Derecha: Acordes Diatónicos en Guitarra -->
+            <div class="lg:col-span-7 bg-studio-900 border border-zinc-800/90 rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg">
+                <div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3 mb-4">
+                        <div>
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <i data-lucide="layers" class="w-4 h-4 text-sky-400"></i>
+                                <span>Acordes Diatónicos (Armonización)</span>
+                            </h3>
+                            <p class="text-xs text-zinc-400 mt-0.5">Pulsa un acorde para rasguearlo y ver sus posiciones en el mástil</p>
+                        </div>
+
+                        <!-- Selector Tríadas vs Séptimas -->
+                        <div class="flex items-center bg-studio-800 p-1 rounded-lg border border-zinc-700/60">
+                            <button id="btn-chords-triad" class="px-2.5 py-1 text-xs font-medium rounded-md bg-sky-600 text-white transition-all">Tríadas</button>
+                            <button id="btn-chords-seventh" class="px-2.5 py-1 text-xs font-medium rounded-md text-zinc-400 hover:text-white transition-all">Séptimas (7ª)</button>
+                        </div>
+                    </div>
+
+                    <!-- Cuadrícula de Acordes -->
+                    <div id="diatonic-chords-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        <!-- Acordes generados dinámicamente -->
+                    </div>
+                </div>
+
+                <!-- Estado de acorde activo -->
+                <div id="active-chord-banner" class="hidden items-center justify-between bg-studio-800/90 border border-emerald-500/30 rounded-xl px-4 py-2.5 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                        <span class="text-zinc-300">Acorde activo: <strong id="active-chord-name" class="text-white font-semibold">C</strong></span>
+                        <span id="active-chord-notes" class="font-mono text-emerald-400 ml-1">(C - E - G)</span>
+                    </div>
+                    <button id="btn-clear-chord" class="text-zinc-400 hover:text-white underline cursor-pointer">Volver a escala</button>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Footer Minimalista -->
+    <footer class="border-t border-zinc-800/60 bg-studio-950 py-4 mt-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-zinc-500">
+            <p>GuitarScale Studio &bull; Visualizador Interactivo de Escalas y Digitación para Guitarra Acústica</p>
+            <p class="font-mono">Afinación Estándar: E2 · A2 · D3 · G3 · B3 · E4 (15 Trastes)</p>
+        </div>
+    </footer>
+
+    <!-- Lógica Completa de Guitarra, Teoría Musical y Síntesis Acústica -->
+    <script>
+        /**
+         * ============================================================================
+         * 1. CONSTANTES DE TEORÍA MUSICAL Y CONFIGURACIÓN DE GUITARRA
+         * ============================================================================
+         */
+        const NOTES_EN = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const NOTES_DISPLAY = ['C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#/Ab', 'A', 'A#/Bb', 'B'];
+        const NOTES_ES = ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'];
+
+        // Afinación estándar de guitarra acústica de arriba hacia abajo en el diagrama visual:
+        // Fila 0 = 1ª cuerda (E4 aguda), Fila 5 = 6ª cuerda (E2 grave)
+        const GUITAR_STRINGS = [
+            { stringNum: 1, nameEn: 'E4', nameEs: 'Mi4', midiOpen: 64, pitchClass: 4, isWound: false, thickness: 1.5 },
+            { stringNum: 2, nameEn: 'B3', nameEs: 'Si3', midiOpen: 59, pitchClass: 11, isWound: false, thickness: 2.0 },
+            { stringNum: 3, nameEn: 'G3', nameEs: 'Sol3', midiOpen: 55, pitchClass: 7, isWound: true, thickness: 2.5 },
+            { stringNum: 4, nameEn: 'D3', nameEs: 'Re3', midiOpen: 50, pitchClass: 2, isWound: true, thickness: 3.1 },
+            { stringNum: 5, nameEn: 'A2', nameEs: 'La2', midiOpen: 45, pitchClass: 9, isWound: true, thickness: 3.8 },
+            { stringNum: 6, nameEn: 'E2', nameEs: 'Mi2', midiOpen: 40, pitchClass: 4, isWound: true, thickness: 4.5 }
+        ];
+
+        const TOTAL_FRETS = 15; // Trastes 0 (al aire) al 15
+        const SINGLE_INLAY_FRETS = [3, 5, 7, 9, 15];
+        const DOUBLE_INLAY_FRETS = [12];
+
+        const FINGER_NAMES = {
+            0: '0 (Al aire)',
+            1: '1 (Índice)',
+            2: '2 (Medio)',
+            3: '3 (Anular)',
+            4: '4 (Meñique)'
+        };
+
+        // Catálogo de escalas musicales adaptado a guitarra
+        const SCALES_DB = [
+            {
+                id: 'pentatonic_minor',
+                category: 'Pentatónicas y Blues (Esenciales)',
+                name: 'Pentatónica Menor',
+                intervals: [0, 3, 5, 7, 10],
+                degrees: ['1', 'b3', '4', '5', 'b7'],
+                description: 'La escala más icónica en guitarra acústica y eléctrica para solos, riffs e improvisación.'
+            },
+            {
+                id: 'pentatonic_major',
+                category: 'Pentatónicas y Blues (Esenciales)',
+                name: 'Pentatónica Mayor',
+                intervals: [0, 2, 4, 7, 9],
+                degrees: ['1', '2', '3', '5', '6'],
+                description: 'Sonido brillante, folk, country y pop acústico. Muy cómoda en patrones de 2 notas por cuerda.'
+            },
+            {
+                id: 'blues',
+                category: 'Pentatónicas y Blues (Esenciales)',
+                name: 'Escala de Blues',
+                intervals: [0, 3, 5, 6, 7, 10],
+                degrees: ['1', 'b3', '4', 'b5', '5', 'b7'],
+                description: 'Añade la "Blue Note" (b5) a la pentatónica menor para fraseos expresivos de blues acústico.'
+            },
+            {
+                id: 'major',
+                category: 'Escalas Mayores y Menores',
+                name: 'Mayor (Jónica)',
+                intervals: [0, 2, 4, 5, 7, 9, 11],
+                degrees: ['1', '2', '3', '4', '5', '6', '7'],
+                description: 'Base de la armonía occidental. Fundamental para construir acordes y melodías claras.'
+            },
+            {
+                id: 'natural_minor',
+                category: 'Escalas Mayores y Menores',
+                name: 'Menor Natural (Eólica)',
+                intervals: [0, 2, 3, 5, 7, 8, 10],
+                degrees: ['1', '2', 'b3', '4', '5', 'b6', 'b7'],
+                description: 'Sonido melancólico y profundo. Ideal para baladas acústicas y arpegios.'
+            },
+            {
+                id: 'harmonic_minor',
+                category: 'Escalas Mayores y Menores',
+                name: 'Menor Armónica',
+                intervals: [0, 2, 3, 5, 7, 8, 11],
+                degrees: ['1', '2', 'b3', '4', '5', 'b6', '7'],
+                description: 'Carácter neoclásico, flamenco y dramático gracias a su séptima mayor.'
+            },
+            {
+                id: 'melodic_minor',
+                category: 'Escalas Mayores y Menores',
+                name: 'Menor Melódica',
+                intervals: [0, 2, 3, 5, 7, 9, 11],
+                degrees: ['1', '2', 'b3', '4', '5', '6', '7'],
+                description: 'Escala menor con 6ª y 7ª mayores. Muy apreciada en fingerstyle jazz y fusión.'
+            },
+            {
+                id: 'dorian',
+                category: 'Modos Griegos',
+                name: 'Modo Dórico',
+                intervals: [0, 2, 3, 5, 7, 9, 10],
+                degrees: ['1', '2', 'b3', '4', '5', '6', 'b7'],
+                description: 'Modo menor con sexta mayor. Muy usado en folk celta, rock acústico y funk.'
+            },
+            {
+                id: 'phrygian',
+                category: 'Modos Griegos',
+                name: 'Modo Frigio',
+                intervals: [0, 1, 3, 5, 7, 8, 10],
+                degrees: ['1', 'b2', 'b3', '4', '5', 'b6', 'b7'],
+                description: 'El sonido característico de la guitarra española y flamenca gracias a su segunda menor (b2).'
+            },
+            {
+                id: 'phrygian_dominant',
+                category: 'Modos Griegos',
+                name: 'Frigio Dominante (Flamenca)',
+                intervals: [0, 1, 4, 5, 7, 8, 10],
+                degrees: ['1', 'b2', '3', '4', '5', 'b6', 'b7'],
+                description: 'Quinto modo de la menor armónica. Esencial en flamenco, música árabe y española.'
+            },
+            {
+                id: 'lydian',
+                category: 'Modos Griegos',
+                name: 'Modo Lidio',
+                intervals: [0, 2, 4, 6, 7, 9, 11],
+                degrees: ['1', '2', '3', '#4', '5', '6', '7'],
+                description: 'Brillante, abierto y cinematográfico debido a su cuarta aumentada (#4).'
+            },
+            {
+                id: 'mixolydian',
+                category: 'Modos Griegos',
+                name: 'Modo Mixolidio',
+                intervals: [0, 2, 4, 5, 7, 9, 10],
+                degrees: ['1', '2', '3', '4', '5', '6', 'b7'],
+                description: 'Sonido clásico de rock acústico, bluegrass y country con séptima menor.'
+            }
+        ];
+
+        /**
+         * ============================================================================
+         * 2. ESTADO GLOBAL DE LA APLICACIÓN
+         * ============================================================================
+         */
+        const state = {
+            rootIndex: 9,           // 9 = A (La) por defecto, clásico en guitarra
+            scaleId: 'pentatonic_minor',
+            positionMode: 'box1',   // 'box1', 'box2', 'box3', 'open', 'all'
+            badgeMode: 'fingering', // 'fingering' (Dedos 1-4), 'notes', 'degrees'
+            notation: 'EN',         // 'EN' o 'ES'
+            leftHanded: false,      // Orientación para zurdos
+            chordMode: 'triad',     // 'triad' o 'seventh'
+            tone: 'steel',          // 'steel', 'nylon', 'warm-jazz'
+            bpm: 110,
+            isPlayingScale: false,
+            playbackTimers: [],
+            activeChordNotes: null  // Array de pitchClasses (0-11) si se pulsa un acorde
+        };
+
+        /**
+         * ============================================================================
+         * 3. MOTOR DE SÍNTESIS ACÚSTICA (WEB AUDIO API - CUERDA PULSADA)
+         * ============================================================================
+         */
+        class AcousticGuitarSynth {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            midiToFreq(midiNumber) {
+                return 440 * Math.pow(2, (midiNumber - 69) / 12);
+            }
+
+            /**
+             * Sintetiza el sonido de una cuerda pulsada de guitarra acústica
+             */
+            pluck(midiNumber, duration = 1.4, velocity = 0.45) {
+                try {
+                    this.init();
+                    const freq = this.midiToFreq(midiNumber);
+                    const now = this.ctx.currentTime;
+
+                    const masterGain = this.ctx.createGain();
+                    masterGain.connect(this.ctx.destination);
+
+                    // Envolvente de cuerda pulsada (ataque rápido, decaimiento natural)
+                    masterGain.gain.setValueAtTime(0.001, now);
+                    masterGain.gain.linearRampToValueAtTime(velocity, now + 0.008);
+                    masterGain.gain.exponentialRampToValueAtTime(velocity * 0.42, now + 0.28);
+                    masterGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+                    // Filtro resonante que simula la caja de resonancia de madera
+                    const bodyFilter = this.ctx.createBiquadFilter();
+                    bodyFilter.type = 'lowpass';
+
+                    // Osciladores armónicos según timbre elegido (Acero, Nylon o Electroacústica)
+                    const osc1 = this.ctx.createOscillator();
+                    const osc2 = this.ctx.createOscillator();
+                    const osc2Gain = this.ctx.createGain();
+
+                    if (state.tone === 'steel') {
+                        osc1.type = 'sawtooth';
+                        osc2.type = 'triangle';
+                        osc2.frequency.setValueAtTime(freq * 2, now);
+                        osc2Gain.gain.setValueAtTime(0.35, now);
+
+                        bodyFilter.frequency.setValueAtTime(Math.min(4800, freq * 9), now);
+                        bodyFilter.frequency.exponentialRampToValueAtTime(Math.max(450, freq * 2.2), now + duration * 0.85);
+                        bodyFilter.Q.setValueAtTime(1.8, now);
+                    } else if (state.tone === 'nylon') {
+                        osc1.type = 'triangle';
+                        osc2.type = 'sine';
+                        osc2.frequency.setValueAtTime(freq * 2, now);
+                        osc2Gain.gain.setValueAtTime(0.2, now);
+
+                        bodyFilter.frequency.setValueAtTime(Math.min(2400, freq * 5.5), now);
+                        bodyFilter.frequency.exponentialRampToValueAtTime(Math.max(320, freq * 1.6), now + duration * 0.75);
+                        bodyFilter.Q.setValueAtTime(1.2, now);
+                    } else {
+                        osc1.type = 'triangle';
+                        osc2.type = 'sawtooth';
+                        osc2.frequency.setValueAtTime(freq, now);
+                        osc2Gain.gain.setValueAtTime(0.18, now);
+
+                        bodyFilter.frequency.setValueAtTime(1900, now);
+                        bodyFilter.frequency.exponentialRampToValueAtTime(420, now + duration * 0.8);
+                        bodyFilter.Q.setValueAtTime(2.4, now);
+                    }
+
+                    osc1.frequency.setValueAtTime(freq, now);
+
+                    // Transitorio breve de púa / uña al pulsar la cuerda
+                    const pluckNoiseDur = 0.025;
+                    const bufferSize = Math.floor(this.ctx.sampleRate * pluckNoiseDur);
+                    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const output = noiseBuffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.35));
+                    }
+                    const noiseSource = this.ctx.createBufferSource();
+                    noiseSource.buffer = noiseBuffer;
+                    const noiseGain = this.ctx.createGain();
+                    noiseGain.gain.setValueAtTime(state.tone === 'steel' ? 0.14 : 0.06, now);
+
+                    osc1.connect(bodyFilter);
+                    osc2.connect(osc2Gain);
+                    osc2Gain.connect(bodyFilter);
+                    noiseSource.connect(noiseGain);
+                    noiseGain.connect(bodyFilter);
+
+                    bodyFilter.connect(masterGain);
+
+                    osc1.start(now);
+                    osc2.start(now);
+                    noiseSource.start(now);
+
+                    osc1.stop(now + duration + 0.05);
+                    osc2.stop(now + duration + 0.05);
+                } catch (e) {
+                    console.warn('Audio error:', e);
+                }
+            }
+
+            /**
+             * Rasgueo de acorde de guitarra (de cuerda grave a aguda)
+             */
+            strumChord(midiNotes, duration = 1.8) {
+                const sorted = [...midiNotes].sort((a, b) => a - b);
+                const vel = Math.min(0.32, 0.75 / sorted.length);
+                sorted.forEach((midi, i) => {
+                    setTimeout(() => {
+                        this.pluck(midi, duration, vel);
+                    }, i * 32); // 32ms entre cuerdas simula un rasgueo natural
+                });
+            }
+        }
+
+        const guitarSynth = new AcousticGuitarSynth();
+
+        /**
+         * ============================================================================
+         * 4. LÓGICA DE POSICIONES (CAJAS) Y DIGITACIÓN DE MANO IZQUIERDA (1-4)
+         * ============================================================================
+         */
+        function getNoteName(pitchClass) {
+            const norm = ((pitchClass % 12) + 12) % 12;
+            return state.notation === 'EN' ? NOTES_EN[norm] : NOTES_ES[norm];
+        }
+
+        function getCurrentScale() {
+            return SCALES_DB.find(s => s.id === state.scaleId) || SCALES_DB[0];
+        }
+
+        function isBlackPitch(pitch) {
+            return [1, 3, 6, 8, 10].includes(((pitch % 12) + 12) % 12);
+        }
+
+        /**
+         * Calcula el rango de trastes [minFret, maxFret] y el traste base (donde va el dedo 1)
+         * según la tónica y la posición seleccionada.
+         */
+        function getActiveFretBox(rootIndex, positionMode) {
+            // Traste donde aparece la tónica en la 6ª cuerda (E2 = pitchClass 4)
+            let rootFret6th = (rootIndex - 4 + 12) % 12;
+            if (rootFret6th === 0) rootFret6th = 12; // Evitar 0 para Caja 1 móvil si se pide caja cerrada
+
+            if (positionMode === 'all') {
+                return { minFret: 0, maxFret: 15, baseFret: 1, label: 'Trastes 0–15 (Completo)' };
+            }
+
+            if (positionMode === 'open') {
+                return { minFret: 0, maxFret: 4, baseFret: 1, label: 'Posición Abierta (0–4)' };
+            }
+
+            if (positionMode === 'box1') {
+                // Posición 1 (Principal desde la tónica en 6ª cuerda; si es muy alta > 11, bajar una octava)
+                const start = rootFret6th > 11 ? rootFret6th - 12 : rootFret6th;
+                const base = Math.max(1, start);
+                const end = Math.min(15, base + 3);
+                return { minFret: base, maxFret: end, baseFret: base, label: `Posición 1 (Trastes ${base}–${end})` };
+            }
+
+            if (positionMode === 'box2') {
+                // Posición 2 (3 trastes más arriba)
+                let start = (rootFret6th + 3) % 12;
+                if (start === 0) start = 12;
+                const end = Math.min(15, start + 3);
+                return { minFret: start, maxFret: end, baseFret: start, label: `Posición 2 (Trastes ${start}–${end})` };
+            }
+
+            if (positionMode === 'box3') {
+                // Posición 3 (7 trastes más arriba, equivalente a tónica en 5ª cuerda)
+                let start = (rootIndex - 9 + 12) % 12; // Tónica en 5ª cuerda (A = 9)
+                if (start === 0) start = 12;
+                const end = Math.min(15, start + 3);
+                return { minFret: start, maxFret: end, baseFret: start, label: `Posición 3 (Trastes ${start}–${end})` };
+            }
+
+            return { minFret: 0, maxFret: 15, baseFret: 1, label: 'Trastes 0–15' };
+        }
+
+        /**
+         * Determina el número de dedo recomendado (0 = al aire, 1 = índice, 2 = medio, 3 = anular, 4 = meñique)
+         * para un traste específico dentro de la posición actual.
+         */
+        function getFingerForFret(fret, box) {
+            if (fret === 0) return 0; // Cuerda al aire
+
+            // Regla ergonómica de 1 dedo por traste relativa al traste base de la caja
+            const offset = fret - box.baseFret;
+            if (offset <= 0) return 1;
+            if (offset === 1) return 2;
+            if (offset === 2) return 3;
+            if (offset >= 3) return 4;
+            return 1;
+        }
+
+        /**
+         * Calcula la secuencia ordenada de pulsación (de grave a aguda) para la escala
+         * y posición activa, asignando a cada posición (stringIdx, fret) su paso #1, #2, #3...
+         */
+        function getOrderedScaleSequence() {
+            const scale = getCurrentScale();
+            const box = getActiveFretBox(state.rootIndex, state.positionMode);
+            const scalePitches = scale.intervals.map(iv => (state.rootIndex + iv) % 12);
+
+            const minF = state.positionMode === 'all' ? 0 : box.minFret;
+            const maxF = state.positionMode === 'all' ? 15 : box.maxFret;
+
+            const sequence = [];
+            const orderMap = {}; // "strIdx-fret" -> paso (1, 2, 3...)
+
+            // Recorrer de 6ª cuerda (índice 5, grave) a 1ª cuerda (índice 0, aguda)
+            for (let strIdx = 5; strIdx >= 0; strIdx--) {
+                const strObj = GUITAR_STRINGS[strIdx];
+                for (let fret = minF; fret <= maxF; fret++) {
+                    const midi = strObj.midiOpen + fret;
+                    const pitch = midi % 12;
+                    if (scalePitches.includes(pitch)) {
+                        // Evitar repetir exactamente la misma altura MIDI al cambiar de cuerda
+                        if (sequence.length === 0 || midi > sequence[sequence.length - 1].midi) {
+                            const stepNumber = sequence.length + 1;
+                            const finger = state.positionMode === 'all'
+                                ? (fret === 0 ? 0 : ((fret - 1) % 4) + 1)
+                                : getFingerForFret(fret, box);
+
+                            const item = {
+                                step: stepNumber,
+                                stringIdx: strIdx,
+                                stringNum: strObj.stringNum,
+                                fret,
+                                midi,
+                                pitch,
+                                finger
+                            };
+                            sequence.push(item);
+                            orderMap[`${strIdx}-${fret}`] = stepNumber;
+                        }
+                    }
+                }
+            }
+
+            return { sequence, orderMap };
+        }
+
+        /**
+         * Calcula la fórmula de tonos y semitonos
+         */
+        function getIntervalSteps(intervals) {
+            const full = [...intervals, 12];
+            const steps = [];
+            for (let i = 0; i < full.length - 1; i++) {
+                const diff = full[i + 1] - full[i];
+                if (diff === 1) steps.push('S');
+                else if (diff === 2) steps.push('T');
+                else if (diff === 3) steps.push('T+S');
+                else steps.push(`${diff}st`);
+            }
+            return steps;
+        }
+
+        /**
+         * Genera los acordes diatónicos de la escala
+         */
+        function generateDiatonicChords(rootIndex, scale) {
+            const len = scale.intervals.length;
+            const chords = [];
+            const romanUpper = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+
+            for (let i = 0; i < len; i++) {
+                const rootOffset = scale.intervals[i];
+                const thirdOffset = scale.intervals[(i + 2) % len] + (i + 2 >= len ? 12 : 0);
+                const fifthOffset = scale.intervals[(i + 4) % len] + (i + 4 >= len ? 12 : 0);
+
+                const thirdInt = thirdOffset - rootOffset;
+                const fifthInt = fifthOffset - rootOffset;
+
+                const pitchClasses = [
+                    (rootIndex + rootOffset) % 12,
+                    (rootIndex + thirdOffset) % 12,
+                    (rootIndex + fifthOffset) % 12
+                ];
+
+                let quality = '';
+                let isMinor = false;
+                let isDim = false;
+                let isAug = false;
+
+                if (thirdInt === 4 && fifthInt === 7) quality = '';
+                else if (thirdInt === 3 && fifthInt === 7) { quality = 'm'; isMinor = true; }
+                else if (thirdInt === 3 && fifthInt === 6) { quality = 'dim'; isDim = true; }
+                else if (thirdInt === 4 && fifthInt === 8) { quality = 'aug'; isAug = true; }
+                else quality = 'sus';
+
+                if (state.chordMode === 'seventh') {
+                    const seventhOffset = scale.intervals[(i + 6) % len] + (i + 6 >= len ? 12 : 0);
+                    const seventhInt = seventhOffset - rootOffset;
+                    pitchClasses.push((rootIndex + seventhOffset) % 12);
+
+                    if (!isMinor && !isDim && !isAug) quality = seventhInt === 11 ? 'maj7' : '7';
+                    else if (isMinor) quality = seventhInt === 11 ? 'm(maj7)' : 'm7';
+                    else if (isDim) quality = seventhInt === 9 ? 'dim7' : 'm7b5';
+                    else if (isAug) quality = seventhInt === 11 ? 'aug(maj7)' : 'aug7';
+                }
+
+                const chordRootName = getNoteName(rootIndex + rootOffset);
+                let roman = romanUpper[i] || `${i + 1}`;
+                if (isMinor || isDim) roman = roman.toLowerCase();
+                if (isDim) roman += '°';
+                if (isAug) roman += '+';
+
+                chords.push({
+                    roman,
+                    name: `${chordRootName}${quality}`,
+                    notes: pitchClasses.map(p => getNoteName(p)),
+                    pitchClasses
+                });
+            }
+            return chords;
+        }
+
+        /**
+         * ============================================================================
+         * 5. CONSTRUCCIÓN Y RENDERIZADO DEL DIAPASÓN DE GUITARRA
+         * ============================================================================
+         */
+        function buildRootSelector() {
+            const grid = document.getElementById('root-selector-grid');
+            grid.innerHTML = '';
+
+            for (let i = 0; i < 12; i++) {
+                const isSelected = state.rootIndex === i;
+                const isBlack = isBlackPitch(i);
+                const btn = document.createElement('button');
+                btn.className = `py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                    isSelected
+                        ? 'bg-rose-600 border-rose-400 text-white shadow-lg shadow-rose-600/30 scale-[1.03]'
+                        : isBlack
+                            ? 'bg-studio-950 border-zinc-800 text-zinc-300 hover:bg-studio-800 hover:border-zinc-600'
+                            : 'bg-studio-800 border-zinc-700/70 text-zinc-100 hover:bg-studio-700'
+                }`;
+                btn.textContent = state.notation === 'EN' ? NOTES_DISPLAY[i] : NOTES_ES[i];
+                btn.addEventListener('click', () => {
+                    stopScalePlayback();
+                    state.activeChordNotes = null;
+                    state.rootIndex = i;
+                    guitarSynth.pluck(48 + i, 0.9, 0.35);
+                    updateAllUI();
+                });
+                grid.appendChild(btn);
+            }
+
+            document.getElementById('selected-root-display').textContent = `${NOTES_DISPLAY[state.rootIndex]} (${NOTES_ES[state.rootIndex]})`;
+        }
+
+        function buildScaleSelector() {
+            const select = document.getElementById('scale-select');
+            select.innerHTML = '';
+
+            const categories = [...new Set(SCALES_DB.map(s => s.category))];
+            categories.forEach(cat => {
+                const group = document.createElement('optgroup');
+                group.label = cat;
+                SCALES_DB.filter(s => s.category === cat).forEach(scale => {
+                    const opt = document.createElement('option');
+                    opt.value = scale.id;
+                    opt.textContent = scale.name;
+                    if (scale.id === state.scaleId) opt.selected = true;
+                    group.appendChild(opt);
+                });
+                select.appendChild(group);
+            });
+        }
+
+        /**
+         * Construye y actualiza visualmente todo el diapasón de 6 cuerdas y 15 trastes
+         */
+        function renderFretboard() {
+            const container = document.getElementById('guitar-fretboard');
+            container.innerHTML = '';
+
+            const scale = getCurrentScale();
+            const box = getActiveFretBox(state.rootIndex, state.positionMode);
+            const { orderMap } = getOrderedScaleSequence();
+
+            // Mapa de pitchClass (0..11) -> grado ('1', 'b3', etc.)
+            const scalePitchToDegree = {};
+            scale.intervals.forEach((interval, idx) => {
+                const pitch = (state.rootIndex + interval) % 12;
+                scalePitchToDegree[pitch] = scale.degrees[idx];
+            });
+
+            // Orden de trastes (0..15 para diestro, 15..0 para zurdo)
+            const fretOrder = [];
+            for (let f = 0; f <= TOTAL_FRETS; f++) fretOrder.push(f);
+            if (state.leftHanded) fretOrder.reverse();
+
+            // Fila superior: Números de Traste
+            const headerRow = document.createElement('div');
+            headerRow.className = 'flex items-center mb-2 pl-12';
+            fretOrder.forEach(fret => {
+                const cell = document.createElement('div');
+                const isMarker = SINGLE_INLAY_FRETS.includes(fret) || DOUBLE_INLAY_FRETS.includes(fret);
+                const isInBox = fret >= box.minFret && fret <= box.maxFret && state.positionMode !== 'all';
+
+                cell.style.flex = fret === 0 ? '0 0 54px' : '1 1 0%';
+                cell.className = `text-center font-mono text-xs py-1 rounded-md transition-colors ${
+                    fret === 0
+                        ? 'text-zinc-400 font-bold'
+                        : isInBox
+                            ? 'text-amber-400 font-bold bg-amber-500/10'
+                            : isMarker
+                                ? 'text-zinc-200 font-semibold'
+                                : 'text-zinc-500'
+                }`;
+                cell.textContent = fret === 0 ? 'Al aire' : fret;
+                headerRow.appendChild(cell);
+            });
+            container.appendChild(headerRow);
+
+            // Cuerpo principal del mástil de madera
+            const boardBody = document.createElement('div');
+            boardBody.className = 'fretboard-wood rounded-xl overflow-hidden relative';
+
+            // Capa de incrustaciones (Inlays en trastes 3, 5, 7, 9, 12, 15)
+            const inlayOverlay = document.createElement('div');
+            inlayOverlay.className = 'absolute inset-0 flex pl-12 pointer-events-none z-0';
+            fretOrder.forEach(fret => {
+                const slot = document.createElement('div');
+                slot.style.flex = fret === 0 ? '0 0 54px' : '1 1 0%';
+                slot.className = 'relative flex items-center justify-center';
+
+                if (SINGLE_INLAY_FRETS.includes(fret)) {
+                    const dot = document.createElement('div');
+                    dot.className = 'fret-inlay';
+                    slot.appendChild(dot);
+                } else if (DOUBLE_INLAY_FRETS.includes(fret)) {
+                    const wrap = document.createElement('div');
+                    wrap.className = 'flex flex-col justify-between h-[56%]';
+                    wrap.innerHTML = '<div class="fret-inlay"></div><div class="fret-inlay"></div>';
+                    slot.appendChild(wrap);
+                }
+                inlayOverlay.appendChild(slot);
+            });
+            boardBody.appendChild(inlayOverlay);
+
+            // Renderizar las 6 cuerdas (1ª aguda arriba -> 6ª grave abajo)
+            GUITAR_STRINGS.forEach((strObj, strIdx) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center h-11 relative z-10';
+
+                // Etiqueta de afinación de la cuerda a la izquierda (E4, B3, G3, D3, A2, E2)
+                const stringLabel = document.createElement('div');
+                stringLabel.className = 'w-12 shrink-0 flex items-center justify-center bg-studio-950/90 h-full border-r border-zinc-800 font-mono text-xs font-bold text-zinc-300';
+                stringLabel.textContent = state.notation === 'EN' ? strObj.nameEn : strObj.nameEs;
+                row.appendChild(stringLabel);
+
+                // Trastes 0 al 15 de esta cuerda
+                fretOrder.forEach(fret => {
+                    const midi = strObj.midiOpen + fret;
+                    const pitch = midi % 12;
+                    const noteName = getNoteName(pitch);
+                    const octave = Math.floor(midi / 12) - 1;
+
+                    const cell = document.createElement('div');
+                    cell.style.flex = fret === 0 ? '0 0 54px' : '1 1 0%';
+                    cell.dataset.stringIdx = strIdx;
+                    cell.dataset.fret = fret;
+                    cell.dataset.midi = midi;
+
+                    const isNut = fret === 0;
+                    const isInBox = fret >= box.minFret && fret <= box.maxFret;
+
+                    cell.className = `fret-cell relative h-full flex items-center justify-center cursor-pointer group ${
+                        isNut
+                            ? 'bg-zinc-900/80 border-r-4 border-stone-200'
+                            : 'border-r-2 border-zinc-500/60'
+                    } ${!isNut && isInBox && state.positionMode !== 'all' ? 'in-box-highlight' : ''}`;
+
+                    // Cuerda física que atraviesa la celda
+                    const stringLine = document.createElement('div');
+                    stringLine.className = `guitar-string ${strObj.isWound ? 'string-wound' : 'string-plain'}`;
+                    stringLine.style.height = `${strObj.thickness}px`;
+                    stringLine.dataset.stringLine = strIdx;
+                    cell.appendChild(stringLine);
+
+                    // Determinar si esta nota pertenece a la escala o acorde activo Y está dentro del rango visible
+                    let belongs = false;
+                    let isRoot = false;
+                    let degree = '';
+
+                    if (state.activeChordNotes) {
+                        const chordRangeMatch = state.positionMode === 'all' || isInBox;
+                        belongs = state.activeChordNotes.includes(pitch) && chordRangeMatch;
+                        isRoot = pitch === state.activeChordNotes[0];
+                        degree = scalePitchToDegree[pitch] || '•';
+                    } else if (scalePitchToDegree.hasOwnProperty(pitch)) {
+                        // LIMPIEZA VISUAL: Solo mostrar las notas dentro de la caja/posición seleccionada
+                        const inSelectedZone = state.positionMode === 'all' || isInBox;
+                        if (inSelectedZone) {
+                            belongs = true;
+                            isRoot = pitch === state.rootIndex;
+                            degree = scalePitchToDegree[pitch];
+                        }
+                    }
+
+                    // Calcular dedo recomendado (0..4) y orden de pulsación (#1, #2...)
+                    const finger = state.positionMode === 'all'
+                        ? (fret === 0 ? 0 : ((fret - 1) % 4) + 1)
+                        : getFingerForFret(fret, box);
+                    const stepOrder = orderMap[`${strIdx}-${fret}`];
+
+                    // Renderizar ÚNICAMENTE las notas pertenecientes a la escala en la posición activa
+                    if (belongs) {
+                        let badgeText = '';
+                        if (state.badgeMode === 'fingering') {
+                            badgeText = finger;
+                        } else if (state.badgeMode === 'order') {
+                            badgeText = stepOrder || '•';
+                        } else if (state.badgeMode === 'notes') {
+                            badgeText = noteName;
+                        } else {
+                            badgeText = degree;
+                        }
+
+                        const dot = document.createElement('div');
+                        dot.dataset.dot = 'true';
+                        dot.className = `note-dot relative z-20 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex flex-col items-center justify-center font-mono font-bold text-xs shadow-lg border-2 ${
+                            isRoot
+                                ? 'bg-rose-600 border-rose-200 text-white shadow-rose-600/40'
+                                : finger === 0
+                                    ? 'bg-zinc-100 border-amber-400 text-zinc-950'
+                                    : 'bg-sky-500 border-sky-200 text-zinc-950 shadow-sky-500/30'
+                        }`;
+
+                        dot.innerHTML = `<span class="leading-none">${badgeText}</span>`;
+                        dot.title = `${stepOrder ? `Paso #${stepOrder} · ` : ''}Cuerda ${strObj.stringNum} · Traste ${fret} · Nota ${noteName}${octave} · Dedo ${FINGER_NAMES[finger]}`;
+                        cell.appendChild(dot);
+                    }
+
+                    // Evento de toque al hacer clic o tap en cualquier cuerda/traste
+                    const triggerPluck = (e) => {
+                        e.preventDefault();
+                        guitarSynth.pluck(midi, 1.4, 0.48);
+                        animateFretCell(strIdx, fret, 350);
+                        updateLiveNoteBanner(strObj, fret, noteName, octave, finger, stepOrder, belongs);
+                    };
+
+                    cell.addEventListener('mousedown', triggerPluck);
+                    cell.addEventListener('touchstart', triggerPluck, { passive: false });
+
+                    row.appendChild(cell);
+                });
+
+                boardBody.appendChild(row);
+            });
+
+            container.appendChild(boardBody);
+        }
+
+        /**
+         * Actualiza el visor superior en tiempo real cada vez que se pulsa una nota
+         */
+        function updateLiveNoteBanner(strObj, fret, noteName, octave, finger, stepOrder, inScale) {
+            const pill = document.getElementById('live-note-pill');
+            const liveText = document.getElementById('live-fret-text');
+            if (!pill || !liveText) return;
+
+            pill.textContent = `${noteName}${octave}`;
+            pill.className = inScale
+                ? 'px-2.5 py-0.5 rounded bg-emerald-500 text-zinc-950 font-mono font-bold text-xs shadow-sm'
+                : 'px-2.5 py-0.5 rounded bg-zinc-700 text-zinc-200 font-mono font-bold text-xs';
+
+            const orderBadge = stepOrder
+                ? ` · Paso <strong class="text-amber-400">#${stepOrder}</strong>`
+                : '';
+
+            liveText.innerHTML = `Cuerda <strong class="text-white">${strObj.stringNum}</strong> · Traste <strong class="text-sky-400">${fret}</strong> · Dedo <strong class="text-emerald-400">${FINGER_NAMES[finger]}</strong>${orderBadge}`;
+        }
+
+        function animateFretCell(stringIdx, fret, durationMs = 320) {
+            const cell = document.querySelector(`#guitar-fretboard [data-string-idx="${stringIdx}"][data-fret="${fret}"]`);
+            if (cell) {
+                const dot = cell.querySelector('[data-dot="true"]');
+                if (dot) {
+                    dot.classList.add('is-playing');
+                    setTimeout(() => dot.classList.remove('is-playing'), durationMs);
+                }
+            }
+            // Vibrar toda la cuerda horizontalmente
+            const stringSegments = document.querySelectorAll(`#guitar-fretboard [data-string-line="${stringIdx}"]`);
+            stringSegments.forEach(seg => {
+                seg.classList.remove('string-vibrating');
+                void seg.offsetWidth; // Reiniciar animación CSS
+                seg.classList.add('string-vibrating');
+            });
+        }
+
+        /**
+         * ============================================================================
+         * 6. PANEL DE TEORÍA MUSICAL Y ACORDES DIATÓNICOS
+         * ============================================================================
+         */
+        function updateTheoryPanel() {
+            const scale = getCurrentScale();
+            const rootName = getNoteName(state.rootIndex);
+            const box = getActiveFretBox(state.rootIndex, state.positionMode);
+
+            document.getElementById('theory-title').querySelector('span').textContent = `${rootName} ${scale.name}`;
+            document.getElementById('scale-description').textContent = scale.description;
+            document.getElementById('position-badge').textContent = box.label;
+
+            // 1. Tarjetas con la secuencia ordenada de pulsación en la posición activa
+            const notesContainer = document.getElementById('scale-notes-cards');
+            notesContainer.innerHTML = '';
+
+            const { sequence } = getOrderedScaleSequence();
+            const displaySequence = state.positionMode === 'all' ? sequence.slice(0, 15) : sequence;
+            document.getElementById('note-count-label').textContent = `${displaySequence.length} pulsaciones`;
+
+            displaySequence.forEach((item) => {
+                const noteName = getNoteName(item.pitch);
+                const isRoot = item.pitch === state.rootIndex;
+
+                const card = document.createElement('button');
+                card.className = `flex flex-col items-center justify-center min-w-[64px] px-2.5 py-2 rounded-xl border transition-all cursor-pointer active:scale-95 ${
+                    isRoot
+                        ? 'bg-rose-500/15 border-rose-500/50 text-rose-200 hover:bg-rose-500/25'
+                        : 'bg-sky-500/10 border-sky-500/30 text-sky-200 hover:bg-sky-500/20'
+                }`;
+                card.title = `Paso #${item.step}: Cuerda ${item.stringNum}, Traste ${item.fret} (Dedo ${item.finger})`;
+                card.innerHTML = `
+                    <div class="flex items-center justify-between w-full text-[10px] font-mono">
+                        <span class="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold">#${item.step}</span>
+                        <span class="text-zinc-400">D${item.finger}</span>
+                    </div>
+                    <span class="text-sm font-bold text-white mt-1">${noteName}</span>
+                    <span class="text-[10px] font-mono text-zinc-400">C${item.stringNum} · T${item.fret}</span>
+                `;
+                card.addEventListener('click', () => {
+                    const strObj = GUITAR_STRINGS[item.stringIdx];
+                    const octave = Math.floor(item.midi / 12) - 1;
+                    guitarSynth.pluck(item.midi, 1.2, 0.45);
+                    animateFretCell(item.stringIdx, item.fret, 350);
+                    updateLiveNoteBanner(strObj, item.fret, noteName, octave, item.finger, item.step, true);
+                });
+                notesContainer.appendChild(card);
+            });
+
+            // 2. Fórmula de Intervalos
+            const formulaContainer = document.getElementById('intervals-formula');
+            formulaContainer.innerHTML = '';
+            const steps = getIntervalSteps(scale.intervals);
+
+            steps.forEach((step, idx) => {
+                const badge = document.createElement('span');
+                const isSemitone = step === 'S';
+                badge.className = `px-2.5 py-1 rounded-md font-bold ${
+                    isSemitone
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : step === 'T+S'
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                            : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                }`;
+                badge.textContent = step;
+                formulaContainer.appendChild(badge);
+
+                if (idx < steps.length - 1) {
+                    const sep = document.createElement('span');
+                    sep.className = 'text-zinc-600';
+                    sep.textContent = '—';
+                    formulaContainer.appendChild(sep);
+                }
+            });
+
+            // 3. Acordes Diatónicos
+            const chordsGrid = document.getElementById('diatonic-chords-grid');
+            chordsGrid.innerHTML = '';
+            const chords = generateDiatonicChords(state.rootIndex, scale);
+
+            chords.forEach(chord => {
+                const btn = document.createElement('button');
+                btn.className = 'group flex flex-col items-start p-3 rounded-xl bg-studio-800/80 hover:bg-studio-700/90 border border-zinc-700/70 hover:border-amber-500/50 transition-all text-left cursor-pointer active:scale-[0.98]';
+                btn.innerHTML = `
+                    <div class="flex items-center justify-between w-full mb-1">
+                        <span class="text-xs font-mono font-bold text-amber-400 group-hover:text-amber-300">${chord.roman}</span>
+                        <i data-lucide="music-2" class="w-3.5 h-3.5 text-zinc-500 group-hover:text-emerald-400 transition-colors"></i>
+                    </div>
+                    <span class="text-sm font-bold text-white tracking-tight">${chord.name}</span>
+                    <span class="text-[11px] font-mono text-zinc-400 mt-1">${chord.notes.join(' · ')}</span>
+                `;
+
+                btn.addEventListener('click', () => {
+                    stopScalePlayback();
+                    state.activeChordNotes = chord.pitchClasses;
+                    renderFretboard();
+
+                    // Construir voicing MIDI grave-a-agudo en guitarra para rasguear
+                    const voicingMidis = chord.pitchClasses.map((pc, i) => 48 + pc + (i >= 2 ? 12 : 0));
+                    guitarSynth.strumChord(voicingMidis, 1.8);
+
+                    const banner = document.getElementById('active-chord-banner');
+                    banner.classList.remove('hidden');
+                    banner.classList.add('flex');
+                    document.getElementById('active-chord-name').textContent = chord.name;
+                    document.getElementById('active-chord-notes').textContent = `(${chord.notes.join(' - ')})`;
+                });
+
+                chordsGrid.appendChild(btn);
+            });
+
+            if (!state.activeChordNotes) {
+                const banner = document.getElementById('active-chord-banner');
+                banner.classList.add('hidden');
+                banner.classList.remove('flex');
+            }
+
+            lucide.createIcons();
+        }
+
+        /**
+         * ============================================================================
+         * 7. PUNTEO AUTOMÁTICO GUIADO SOBRE LA POSICIÓN ACTIVA DEL DIAPASÓN
+         * ============================================================================
+         */
+        function playScaleSequence() {
+            stopScalePlayback();
+            state.activeChordNotes = null;
+            renderFretboard();
+
+            const { sequence } = getOrderedScaleSequence();
+            const playablePositions = state.positionMode === 'all' ? sequence.slice(0, 15) : sequence;
+
+            // Secuencia ascendente y descendente
+            const fullSequence = [...playablePositions, ...[...playablePositions].reverse().slice(1)];
+            if (fullSequence.length === 0) return;
+
+            state.isPlayingScale = true;
+            togglePlayButtons(true);
+
+            const stepMs = (60 / state.bpm) * 520;
+
+            fullSequence.forEach((pos, idx) => {
+                const timerId = setTimeout(() => {
+                    if (!state.isPlayingScale) return;
+                    guitarSynth.pluck(pos.midi, (stepMs / 1000) * 1.4, 0.45);
+                    animateFretCell(pos.stringIdx, pos.fret, stepMs * 0.85);
+
+                    const strObj = GUITAR_STRINGS[pos.stringIdx];
+                    const noteName = getNoteName(pos.pitch);
+                    const octave = Math.floor(pos.midi / 12) - 1;
+                    updateLiveNoteBanner(strObj, pos.fret, noteName, octave, pos.finger, pos.step, true);
+
+                    if (idx === fullSequence.length - 1) {
+                        const endTimer = setTimeout(() => stopScalePlayback(), stepMs);
+                        state.playbackTimers.push(endTimer);
+                    }
+                }, idx * stepMs);
+
+                state.playbackTimers.push(timerId);
+            });
+        }
+
+        function stopScalePlayback() {
+            state.isPlayingScale = false;
+            state.playbackTimers.forEach(id => clearTimeout(id));
+            state.playbackTimers = [];
+            togglePlayButtons(false);
+        }
+
+        function togglePlayButtons(isPlaying) {
+            const playBtn = document.getElementById('btn-play-scale');
+            const stopBtn = document.getElementById('btn-stop-scale');
+            if (isPlaying) {
+                playBtn.classList.add('hidden');
+                stopBtn.classList.remove('hidden');
+            } else {
+                playBtn.classList.remove('hidden');
+                stopBtn.classList.add('hidden');
+            }
+        }
+
+        function updateAllUI() {
+            buildRootSelector();
+            renderFretboard();
+            updateTheoryPanel();
+        }
+
+        /**
+         * ============================================================================
+         * 8. EVENT LISTENERS E INICIALIZACIÓN
+         * ============================================================================
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            buildScaleSelector();
+            updateAllUI();
+
+            // Cambio de escala
+            document.getElementById('scale-select').addEventListener('change', (e) => {
+                stopScalePlayback();
+                state.activeChordNotes = null;
+                state.scaleId = e.target.value;
+                updateAllUI();
+            });
+
+            // Cambio de posición / caja en el mástil
+            document.getElementById('position-select').addEventListener('change', (e) => {
+                stopScalePlayback();
+                state.activeChordNotes = null;
+                state.positionMode = e.target.value;
+                updateAllUI();
+            });
+
+            // Selector de insignia (Dedos 1-4 / Orden / Notas / Grados)
+            const btnFingering = document.getElementById('btn-badge-fingering');
+            const btnOrder = document.getElementById('btn-badge-order');
+            const btnNotes = document.getElementById('btn-badge-notes');
+            const btnDegrees = document.getElementById('btn-badge-degrees');
+
+            const setBadgeMode = (mode, activeBtn) => {
+                state.badgeMode = mode;
+                [btnFingering, btnOrder, btnNotes, btnDegrees].forEach(b => {
+                    b.className = 'px-2.5 py-1 text-xs font-medium rounded-md text-zinc-400 hover:text-white transition-all cursor-pointer';
+                });
+                activeBtn.className = 'px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-500 text-zinc-950 transition-all cursor-pointer';
+                renderFretboard();
+            };
+
+            btnFingering.addEventListener('click', () => setBadgeMode('fingering', btnFingering));
+            btnOrder.addEventListener('click', () => setBadgeMode('order', btnOrder));
+            btnNotes.addEventListener('click', () => setBadgeMode('notes', btnNotes));
+            btnDegrees.addEventListener('click', () => setBadgeMode('degrees', btnDegrees));
+
+            // Notación (Inglesa vs Latina)
+            const btnEn = document.getElementById('btn-notation-en');
+            const btnEs = document.getElementById('btn-notation-es');
+
+            btnEn.addEventListener('click', () => {
+                state.notation = 'EN';
+                btnEn.className = 'px-2.5 py-1 text-xs font-medium rounded-md bg-indigo-600 text-white transition-all';
+                btnEs.className = 'px-2.5 py-1 text-xs font-medium rounded-md text-zinc-400 hover:text-white transition-all';
+                updateAllUI();
+            });
+
+            btnEs.addEventListener('click', () => {
+                state.notation = 'ES';
+                btnEs.className = 'px-2.5 py-1 text-xs font-medium rounded-md bg-indigo-600 text-white transition-all';
+                btnEn.className = 'px-2.5 py-1 text-xs font-medium rounded-md text-zinc-400 hover:text-white transition-all';
+                updateAllUI();
+            });
+
+            // Orientación Diestro / Zurdo
+            document.getElementById('btn-toggle-handedness').addEventListener('click', () => {
+                state.leftHanded = !state.leftHanded;
+                document.getElementById('handedness-label').textContent = state.leftHanded ? 'Zurdo' : 'Diestro';
+                renderFretboard();
+            });
+
+            // Timbre de guitarra acústica
+            document.getElementById('guitar-tone').addEventListener('change', (e) => {
+                state.tone = e.target.value;
+                guitarSynth.pluck(48 + state.rootIndex, 0.9, 0.4);
+            });
+
+            // Control BPM
+            const bpmSlider = document.getElementById('bpm-slider');
+            const bpmValue = document.getElementById('bpm-value');
+            bpmSlider.addEventListener('input', (e) => {
+                state.bpm = parseInt(e.target.value, 10);
+                bpmValue.textContent = state.bpm;
+            });
+
+            // Botones de reproducción
+            document.getElementById('btn-play-scale').addEventListener('click', playScaleSequence);
+            document.getElementById('btn-stop-scale').addEventListener('click', stopScalePlayback);
+
+            // Acordes Tríadas vs Séptimas
+            const btnTriad = document.getElementById('btn-chords-triad');
+            const btnSeventh = document.getElementById('btn-chords-seventh');
+
+            btnTriad.addEventListener('click', () => {
+                state.chordMode = 'triad';
+                state.activeChordNotes = null;
+                btnTriad.className = 'px-2.5 py-1 text-xs font-medium rounded-md bg-sky-600 text-white transition-all';
+                btnSeventh.className = 'px-2.5 py-1 text-xs font-medium rounded-md text-zinc-400 hover:text-white transition-all';
+                updateAllUI();
+            });
+
+            btnSeventh.addEventListener('click', () => {
+                state.chordMode = 'seventh';
+                state.activeChordNotes = null;
+                btnSeventh.className = 'px-2.5 py-1 text-xs font-medium rounded-md bg-sky-600 text-white transition-all';
+                btnTriad.className = 'px-2.5 py-1 text-xs font-medium rounded-md text-zinc-400 hover:text-white transition-all';
+                updateAllUI();
+            });
+
+            // Volver de acorde a escala
+            document.getElementById('btn-clear-chord').addEventListener('click', () => {
+                state.activeChordNotes = null;
+                updateAllUI();
+            });
+        });
+    </script>
+</body>
+</html>
